@@ -1,14 +1,10 @@
 var promise = require( 'bluebird' ),
+	romis = require( 'romis' ),
 	fs = require( 'fs' );
 
-var curId = Number.MIN_VALUE, 
-	idToKey = {},
-	keyToId = {},
-	roomData = {},
-	roomUsers = {},
-	keys;
-
 module.exports = storeRedis;
+
+var ROOM_DOES_NOT_EXIST = promise.reject( 'There is no room by that id' );
 
 /**
  * storeRedis is used to store data in memory on one process. This is not ideal
@@ -25,7 +21,7 @@ function storeRedis( redis ) {
 	if( !( this instanceof storeRedis ) )
 		return new storeRedis( redis );
 
-	this.redis = redis;
+	this.redis = romis.fromRedis( redis );
 }
 
 storeRedis.prototype = {
@@ -38,7 +34,8 @@ storeRedis.prototype = {
 	 */
 	init: function() {
 
-		return this.generateKeys();
+		return this._reset()
+			   .then( this._generateKeys.bind( this ) );
 	},
 
 	/**
@@ -48,40 +45,34 @@ storeRedis.prototype = {
 	 */
 	createRoom: function( userID ) {
 
-		var id = curId;
+		return this._getNextRoomId()
+		.then( function( id ) {
 
-		curId++;
+			return this.joinRoom( userID, id )
+			.then( function() {
 
-		if( curId == Number.MAX_VALUE )
-			curId = Number.MIN_VALUE;
-
-		roomUsers[ id ] = [];
-
-		return this.setRoomData( id, {} )
-			   .then( this.joinRoom.bind( this, userID, id ) )
-			   .then( function() {
-
-			   		return id;
-			   });
+				return id;
+			});
+		}.bind( this ));
 	},
 
 	joinRoom: function( userID, roomID ) {
 
-		if( roomUsers[ roomID ] === undefined ) {
+		var redis = this.redis,
+			setName = 'roomUsers:' + roomID;
 
-			return promise.reject( 'No room with the id: ' + roomID );
-		} else {
+		return redis.sismember( setName, userID )
+		.then( function( isMember ) {
 
-			if( roomUsers[ roomID ].indexOf( userID ) != -1 ) {
+			if( !isMember ) {
 
-				return promise.reject( 'User is already in room' );
-			} else {
-
-				roomUsers[ roomID ].push( userID );
-
-				return promise.resolve( roomID );	
+				return redis.sadd( setName, userID );
 			}
-		}
+		})
+		.then( function() {
+
+			return roomID;
+		});
 	},
 
 	/**
@@ -130,19 +121,29 @@ storeRedis.prototype = {
 	 */
 	getKey: function( roomID ) {
 
-		if( keys.length > 0 ) {
+		var key;
 
-			var randIdx = Math.round( Math.random() * ( keys.length - 1 ) ),
-				key = keys.splice( randIdx, 1 )[ 0 ];
+		return this.redis.spop( 'roomKeys' )
+		.then( function( nKey ) {
 
-			keyToId[ key ] = roomID;
-			idToKey[ roomID ] = key;
+			key = nKey;
 
-			return promise.resolve( key );
-		} else {
+			if( key ) {
 
-			return promise.reject( 'Run out of keys' );
-		}
+				return promise.all( [
+
+					this._setRoomIdForKey( roomID, key ),
+					this._setKeyForRoomID( roomID, key )
+				])
+				.then( function() {
+
+					return key;
+				});
+			} else {
+
+				return promise.reject( 'Run out of keys' );
+			}
+		}.bind( this ));
 	},
 
 	/**
@@ -159,17 +160,16 @@ storeRedis.prototype = {
 
 			if( savedRoomId == roomID ) {
 
-				delete idToKey[ roomID ];
-				delete keyToId[ key ];
+				return this._deleteKeyIdLookups( roomID, key )
+				.then( function() {
 
-				keys.push( key );
-
-				return promise.resolve();
+					return this.redis.sadd( 'roomKeys', key );
+				}.bind( this ));
 			} else {
 
 				return promise.reject( 'roomID and roomID for key do not match' );
 			}
-		});
+		}.bind( this ));
 	},
 
 	/**
@@ -180,15 +180,17 @@ storeRedis.prototype = {
 	 */
 	getRoomIdForKey: function( key ) {
 
-		var savedRoomId = keyToId[ key ];
+		return this.redis.hget( 'keyForRoomID', key )
+		.then( function( savedRoomId ) {
 
-		if( savedRoomId ) {
+			if( savedRoomId ) {
 
-			return promise.resolve( savedRoomId );
-		} else {
+				return promise.resolve( parseInt( savedRoomId ) );
+			} else {
 
-			return promise.reject();
-		}
+				return promise.reject();
+			}
+		});
 	},
 
 	/**
@@ -201,12 +203,23 @@ storeRedis.prototype = {
 	 */
 	setRoomDataVar: function( roomID, key, value ) {
 
-		if( roomData[ roomID ] === undefined )
-			roomData[ roomID ] = {};
+		var redis = this.redis;
 
-		roomData[ roomID ][ key ] = value;
+		return this._doesRoomExist( roomID )
+		.then( function( exists ) {
 
-		return promise.resolve( value );
+			if( exists ) {
+
+				return redis.hset( 'roomData:' + roomID, key, value )
+				.then( function( countSet ) {
+
+					return value;
+				});
+			} else {
+
+				return ROOM_DOES_NOT_EXIST;
+			}
+		});
 	},
 
 	/**
@@ -218,13 +231,23 @@ storeRedis.prototype = {
 	 */
 	getRoomDataVar: function( roomID, key ) {
 
-		if( roomData[ roomID ] === undefined ) {
+		var redis = this.redis;
 
-			return promise.reject( 'There is no room by that id' );
-		} else {
+		return this._doesRoomExist( roomID )
+		.then( function( exists ) {
 
-			return promise.resolve( roomData[ roomID ][ key ] );
-		}
+			if( exists ) {
+
+				return redis.hget( 'roomData:' + roomID, key )
+				.then( function( value ) {
+
+					return value == null ? undefined : value;
+				});
+			} else {
+
+				return ROOM_DOES_NOT_EXIST;
+			}
+		});
 	},
 
 	/**
@@ -236,19 +259,33 @@ storeRedis.prototype = {
 	 */
 	delRoomDataVar: function( roomID, key ) {
 
-		var oldVal;
+		var redis = this.redis,
+			rVal;
 
-		if( roomData[ roomID ] === undefined ) {
+		return this._doesRoomExist( roomID )
+		.then( function( exists ) {
 
-			return promise.reject( 'There is no room by that id' );
-		} else {
+			if( exists ) {
 
-			oldVal = roomData[ roomID ][ key ];
+				return this.getRoomDataVar( roomID, key )
+				.then( function( value ) {
 
-			delete roomData[ roomID ][ key ];
+					rVal = value;
+				})
+				.then( function() {
 
-			return promise.resolve( oldVal );
-		}
+					return redis.hdel( 'roomData:' + roomID, key );
+				})
+				.then( function() {
+
+					return rVal;
+				})
+				.catch();
+			} else {
+
+				return ROOM_DOES_NOT_EXIST;
+			}
+		}.bind( this ));
 	},
 
 	/**
@@ -259,10 +296,23 @@ storeRedis.prototype = {
 	 */
 	getRoomData: function( roomID ) {
 
-		if( roomData[ roomID ] )
-			return promise.resolve( roomData[ roomID ] );
-		else
-			return promise.reject( 'No room data' );
+		var redis = this.redis;
+
+		return this._doesRoomExist( roomID )
+		.then( function( exists ) {
+
+			if( exists ) {
+
+				return redis.hgetall( 'roomData:' + roomID )
+				.then( function( data ) {
+
+					return data === null ? {} : data;
+				});
+			} else {
+
+				return ROOM_DOES_NOT_EXIST;
+			}
+		});
 	},
 
 	/**
@@ -273,32 +323,73 @@ storeRedis.prototype = {
 	 */
 	setRoomData: function( roomID, data ) {
 
-		roomData[ roomID ] = data;
+		var redis = this.redis;
 
-		return promise.resolve( data );
+		return redis.hmset( 'roomData:' + roomID, data )
+		.then( function() {
+
+			return data;
+		});
 	},
 
 	/**
-	 * generateKeys is a function which will create and store a set of 
+	 * _generateKeys is a function which will create and store a set of 
 	 * keys which can be used to enter a room instead of a room id
+	 *
+	 * @private
 	 */
-	generateKeys: function() {
+	_generateKeys: function() {
 
-		var redisExists = promise.promisify( this.redis.exists.bind( this.redis ) ),
-			redisDel = promise.promisify( this.redis.del.bind( this.redis ) ),
-			redisEval = promise.promisify( this.redis.eval.bind( this.redis ) );
+		var redis = this.redis;
 
-		return redisExists( 'roomKeys' )
-		.then( function( exists ) {
+		return redis.eval( fs.readFileSync( 'lua/generateKeys.lua', 'utf8' ), 0, 5 );
+	},
 
-			if( exists ) {
+	_doesRoomExist: function( roomID ) {
 
-				return redisDel( 'roomKeys' )
-					   .then( redisEval( fs.readFileSync( 'lua/generateKeys.lua', 'utf8' ), 0, 5 ) );
-			} else {
+		return this.redis.scard( 'roomUsers:' + roomID )
+		.then( function( countUsers ) {
 
-				return redisEval( fs.readFileSync( 'lua/generateKeys.lua', 'utf8' ), 0, 5 );
-			}
+			return countUsers > 0;
 		});
+	},
+
+	_setRoomIdForKey: function( roomID, key ) {
+
+		return this.redis.hset( 'roomIDForKey', roomID, key );
+	},
+
+	_setKeyForRoomID: function( roomID, key ) {
+
+		return this.redis.hset( 'keyForRoomID', key, roomID );
+	},
+
+	_deleteKeyIdLookups: function( roomID, key ) {
+
+		var redis = this.redis;
+
+		return promise.all( [
+
+			redis.hdel( 'roomIDForKey', roomID ),
+			redis.hdel( 'keyForRoomID', key )
+		]);
+	},
+
+	_reset: function() {
+
+		var redis = this.redis;
+
+		return redis.set( 'nextRoomID', 0 )
+		.then( function() {
+
+			return redis.flushdb();
+		});
+	},
+
+	_getNextRoomId: function() {
+
+		var redis = this.redis;
+
+		return redis.eval( fs.readFileSync( 'lua/getRoomID.lua', 'utf8' ), 0 );
 	}
 };

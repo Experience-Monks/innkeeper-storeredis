@@ -22,7 +22,8 @@
   },
   "homepage": "https://github.com/Jam3/innkeeper-storeredis",
   "dependencies": {
-    "bluebird": "^2.3.11"
+    "bluebird": "^2.3.11",
+    "romis": "0.0.5"
   },
   "devDependencies": {
     "redis": "^0.12.1",
