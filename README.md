@@ -2,7 +2,7 @@
 
 [![experimental](http://badges.github.io/stability-badges/dist/experimental.svg)](http://github.com/badges/stability-badges)
 
-innkeeper-storeredis provides servers group/room management using an memory store you can define
+innkeeper-storeredis is a memory store for inn-keeper which uses a Redis database
 
 ## Usage
 
