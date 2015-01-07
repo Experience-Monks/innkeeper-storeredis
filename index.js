@@ -5,6 +5,7 @@ var promise = require( 'bluebird' ),
 module.exports = storeRedis;
 
 var ROOM_DOES_NOT_EXIST = promise.reject( 'There is no room by that id' );
+ROOM_DOES_NOT_EXIST.catch( function() {} ); // this is to ensure there isnt a logged error
 
 /**
  * storeRedis is used to store data in memory on one process. This is not ideal
@@ -323,13 +324,22 @@ storeRedis.prototype = {
 	 */
 	setRoomData: function( roomID, data ) {
 
-		var redis = this.redis;
+		var redis = this.redis,
+			name = 'roomData:' + roomID;
 
 		return redis.hmset( 'roomData:' + roomID, data )
 		.then( function() {
 
 			return data;
 		});
+
+		return redis.watch( name )
+		.then( function() {
+
+			return redis.multi()
+			.set( name, JSON.stringify( data ) )
+			.exec();
+		}.bind( this ))
 	},
 
 	/**

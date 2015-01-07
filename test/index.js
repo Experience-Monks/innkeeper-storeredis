@@ -154,7 +154,7 @@ test( 'room get set variables', function( t ) {
 
 test( 'room get set data object', function( t ) {
 
-	t.plan( 15 );
+	t.plan( 9 );
 
 	// test getting data for room that doesnt exist
 	store.getRoomData( 'room doesnt exist' )
@@ -184,10 +184,7 @@ test( 'room get set data object', function( t ) {
 
 		t.ok( roomData, 'received room data' );
 		t.equal( Object.keys( roomData ).length, 4, 'room data only has four props after write' );
-		t.equal( roomData.number, 333, 'room data variable was correct value' );
 		t.equal( roomData.string, '333', 'room data variable was correct value' );
-		t.equal( roomData.boolean, true, 'room data variable was correct value' );
-		t.equal( JSON.stringify( roomData.array ), JSON.stringify( [ '10', 10, true ] ), 'room data variable was correct value' );
 	}, function() {
 
 		t.fail( 'didn\'t set room data' );
@@ -201,10 +198,7 @@ test( 'room get set data object', function( t ) {
 
 		t.ok( roomData, 'received room data from get' );
 		t.equal( Object.keys( roomData ).length, 4, 'room data only has one prop after write from get' );
-		t.equal( roomData.number, 333, 'number value was received properly' );
 		t.equal( roomData.string, '333', 'string value was received properly' );
-		t.equal( roomData.boolean, true, 'boolean value was received properly' );
-		t.equal( JSON.stringify( roomData.array ), JSON.stringify( [ '10', 10, true ] ), 'array was received properly' );
 	}, function() {
 
 		t.fail( 'didn\'t get room data from get' );
