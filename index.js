@@ -24,6 +24,13 @@ function storeRedis( redis ) {
 		return new storeRedis( redis );
 
 	this.redis = romis.fromRedis( redis );
+
+	this.redis.on( 'message', function( channel, message ) {
+
+		message = JSON.parse( message );
+		
+		this.emit( message.roomID, message );
+	}.bind( this ));
 }
 
 var p = storeRedis.prototype = new EventEmitter();
@@ -74,12 +81,16 @@ p.joinRoom = function( userID, roomID ) {
 			.then( getUsers )
 			.then( function( users ) {
 
-				emitter.emit( roomID, {
+				var message = {
 
+					roomID: roomID,
 					action: 'join',
 					user: userID,
 					users: users
-				});
+				};
+
+				emitter.emit( roomID, message );
+				redis.publish( 'user', JSON.stringify( message ) );
 
 				return roomID;
 			});
@@ -121,12 +132,15 @@ p.leaveRoom = function( userID, roomID ) {
 			return getUsers()
 			.then( function( users ) {
 
-				emitter.emit( roomID, {
-
+				var message = {
+					roomID: roomID,
 					action: 'leave',
 					user: userID,
 					users: users
-				});
+				};
+
+				emitter.emit( roomID, message );
+				redis.publish( 'user', JSON.stringify( message ) );
 
 				return roomID;
 			});
