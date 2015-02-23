@@ -1,9 +1,11 @@
-var test = require( 'tape' ),
+var test = require( 'tape' ).createHarness(),
 	promise = require( 'bluebird' ),
 	redis = require( 'redis' ),
 	storeMemory = require( './..' );
 
-var USER_ID = 0,
+test.createStream().pipe( process.stdout );
+
+var USER_ID = '0', OTHER_USER_ID = '1',
 	store, roomId, key;
 
 test( 'create a room', function( t ) {
@@ -25,6 +27,56 @@ test( 'create a room', function( t ) {
 			roomId = id;
 			t.ok( roomId, 'Created a room' );
 		});
+	});
+});
+
+test( 'joining a room', function( t ) {
+
+	t.plan( 5 );
+
+	var gotInfo = false;
+
+	store.on( roomId, function( info ) {
+
+		gotInfo = true;
+
+		t.equal( info.action, 'join', 'action was correct' );
+		t.equal( info.user, OTHER_USER_ID, 'user was correct' );
+		t.ok( info.users.indexOf( USER_ID ) > -1, 'user 1 was found in users' );
+		t.ok( info.users.indexOf( OTHER_USER_ID ) > -1, 'user 2 was found in users' );
+
+		store.removeAllListeners();
+	});
+
+	store.joinRoom( OTHER_USER_ID, roomId )
+	.then( function() {
+
+		t.ok( gotInfo, 'received event before promise resolved' );
+	});
+});
+
+test( 'leaving a room', function( t ) {
+
+	t.plan( 5 );
+
+	var gotInfo = false;
+
+	store.on( roomId, function( info ) {
+
+		gotInfo = true;
+
+		t.equal( info.action, 'leave', 'action was correct' );
+		t.equal( info.user, OTHER_USER_ID, 'user was correct' );
+		t.ok( info.users.indexOf( USER_ID ) > -1, 'user 1 was found in users' );
+		t.ok( info.users.indexOf( OTHER_USER_ID ) == -1, 'user 2 was not found in users' );
+
+		store.removeAllListeners();
+	});
+
+	store.leaveRoom( OTHER_USER_ID, roomId )
+	.then( function() {
+
+		t.ok( gotInfo, 'received event before promise resolved' );
 	});
 });
 
@@ -204,6 +256,7 @@ test( 'room get set data object', function( t ) {
 		t.fail( 'didn\'t get room data from get' );
 		t.end();
 
+		test.close();
 		process.exit();
-	})
+	});
 });
