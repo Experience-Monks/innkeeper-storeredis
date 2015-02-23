@@ -65,6 +65,13 @@ p.createRoom = function( userID ) {
 	}.bind( this ));
 };
 
+/**
+ * Join an existing room
+ * 
+ * @param  {String} userID an id for the user whose joining
+ * @param  {String} roomID an id for the room the user is joing
+ * @return {Promise} A promise which will resolve and return a roomID
+ */
 p.joinRoom = function( userID, roomID ) {
 
 	var redis = this.redis;
@@ -100,13 +107,6 @@ p.joinRoom = function( userID, roomID ) {
 
 		return roomID;
 	});
-};
-
-p.getUsers = function( roomID ) {
-
-	var setName = 'roomUsers:' + roomID;
-
-	return this.redis.smembers( setName );
 };
 
 /**
@@ -150,6 +150,19 @@ p.leaveRoom = function( userID, roomID ) {
 
 		return promise.reject( 'User ' + userID + ' is not in the room: ' + roomID );
 	});
+};
+
+/**
+ * Get all users for a room
+ * 
+ * @param  {String} roomID room id where to retrieve users
+ * @return {Promise} A promise is returned which will return all users in a room
+ */
+p.getUsers = function( roomID ) {
+
+	var setName = 'roomUsers:' + roomID;
+
+	return this.redis.smembers( setName );
 };
 
 /**
