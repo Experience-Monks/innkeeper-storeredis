@@ -1,6 +1,6 @@
 {
   "name": "innkeeper-storeredis",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "This is a redis store used by innkeeper. It handles room creation, management, keys, and data.",
   "main": "index.js",
   "scripts": {
