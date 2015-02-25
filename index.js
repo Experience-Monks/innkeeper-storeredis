@@ -23,6 +23,8 @@ function storeRedis( redis ) {
 	if( !( this instanceof storeRedis ) )
 		return new storeRedis( redis );
 
+	EventEmitter.call( this );
+
 	this.redis = romis.fromRedis( redis );
 
 	this.redis.on( 'message', function( channel, message ) {
@@ -33,7 +35,7 @@ function storeRedis( redis ) {
 	}.bind( this ));
 }
 
-var p = storeRedis.prototype = new EventEmitter();
+var p = storeRedis.prototype = Object.create( EventEmitter.prototype );
 
 /**
  * The init function should be called before doing anything.
