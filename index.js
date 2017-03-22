@@ -8,6 +8,10 @@ module.exports = storeRedis;
 var ROOM_DOES_NOT_EXIST = promise.reject( 'There is no room by that id' );
 ROOM_DOES_NOT_EXIST.catch( function() {} ); // this is to ensure there isnt a logged error
 
+// Caching LUA Redis Commands
+var LUA_GET_ROOM_ID = fs.readFileSync( path.join( __dirname, 'lua/getRoomID.lua' ), 'utf8' );
+var LUA_GENERATE_KEYS = fs.readFileSync( path.join( __dirname, 'lua/generateKeys.lua' ), 'utf8' );
+
 /**
  * storeRedis is used to store data in memory on one process. This is not ideal
  * for clustered servers as each process may have different data. Use another
@@ -406,7 +410,7 @@ p._generateKeys = function() {
 
 	var redis = this.redis;
 
-	return redis.eval( fs.readFileSync( 'lua/generateKeys.lua', 'utf8' ), 0, 5 );
+	return redis.eval( LUA_GENERATE_KEYS , 0, 5 );
 };
 
 p._doesRoomExist = function( roomID ) {
@@ -454,5 +458,5 @@ p._getNextRoomId = function() {
 
 	var redis = this.redis;
 
-	return redis.eval( fs.readFileSync( 'lua/getRoomID.lua', 'utf8' ), 0 );
+	return redis.eval( LUA_GET_ROOM_ID , 0 );
 };
