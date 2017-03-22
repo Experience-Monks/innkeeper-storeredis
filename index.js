@@ -1,6 +1,7 @@
 var promise = require( 'bluebird' );
 var romis = require( 'romis' );
 var fs = require( 'fs' );
+var path = require( 'path' );
 var EventEmitter = require( 'events' ).EventEmitter;
 
 module.exports = storeRedis;
