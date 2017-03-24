@@ -402,6 +402,31 @@ p.setRoomData = function( roomID, data ) {
 };
 
 /**
+ * Set room as public
+ * 
+ * @param  {String} roomID id for the room you'd like to make public
+ * @return {Promise} This promise will succeed when the room as been set as public
+ */
+p.makeRoomPublic = function( roomID ) {
+
+	var redis = this.redis;
+
+	return this.getRoomData( roomID ).then( redis.rpush( 'public', roomID ) );
+};
+
+/**
+ * Gets first first available public room
+ * 
+ * @return {Promise} This promise will succeed when the room has been retrieved
+ */
+p.getPublicRoom = function() {
+
+	var redis = this.redis;
+
+	return redis.lpop( 'public' );
+};
+
+/**
  * _generateKeys is a function which will create and store a set of 
  * keys which can be used to enter a room instead of a room id
  *
