@@ -414,8 +414,22 @@ p.makeRoomPublic = function( roomID ) {
 	return this.getRoomData( roomID ).then( redis.rpush( 'public', roomID ) );
 };
 
+
 /**
- * Gets first first available public room
+ * Set room as private, removing it from the publicly available list
+ * 
+ * @param  {String} roomID id for the room you'd like to make private
+ * @return {Promise} This promise will succeed when the room as been set as private
+ */
+p.makeRoomPrivate = function( roomID ) {
+
+	var redis = this.redis;
+
+	return redis.lrem( 'public', 0, roomID );
+};
+
+/**
+ * Gets the first available public room
  * 
  * @return {Promise} This promise will succeed when the room has been retrieved
  */
@@ -423,7 +437,7 @@ p.getPublicRoom = function() {
 
 	var redis = this.redis;
 
-	return redis.lpop( 'public' );
+	return redis.lindex( 'public', 0 );
 };
 
 /**
