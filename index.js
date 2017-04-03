@@ -1,12 +1,17 @@
 var promise = require( 'bluebird' );
 var romis = require( 'romis' );
 var fs = require( 'fs' );
+var path = require( 'path' );
 var EventEmitter = require( 'events' ).EventEmitter;
 
 module.exports = storeRedis;
 
 var ROOM_DOES_NOT_EXIST = promise.reject( 'There is no room by that id' );
 ROOM_DOES_NOT_EXIST.catch( function() {} ); // this is to ensure there isnt a logged error
+
+// Caching LUA Redis Commands
+var LUA_GET_ROOM_ID = fs.readFileSync( path.join( __dirname, 'lua/getRoomID.lua' ), 'utf8' );
+var LUA_GENERATE_KEYS = fs.readFileSync( path.join( __dirname, 'lua/generateKeys.lua' ), 'utf8' );
 
 /**
  * storeRedis is used to store data in memory on one process. This is not ideal
@@ -397,6 +402,45 @@ p.setRoomData = function( roomID, data ) {
 };
 
 /**
+ * Set room as public
+ * 
+ * @param  {String} roomID id for the room you'd like to make public
+ * @return {Promise} This promise will succeed when the room as been set as public
+ */
+p.setRoomPublic = function( roomID ) {
+
+	var redis = this.redis;
+
+	return this.getRoomData( roomID ).then( redis.rpush( 'public', roomID ) );
+};
+
+
+/**
+ * Set room as private, removing it from the publicly available list
+ * 
+ * @param  {String} roomID id for the room you'd like to make private
+ * @return {Promise} This promise will succeed when the room as been set as private
+ */
+p.setRoomPrivate = function( roomID ) {
+
+	var redis = this.redis;
+
+	return redis.lrem( 'public', 0, roomID );
+};
+
+/**
+ * Gets the first available public room
+ * 
+ * @return {Promise} This promise will succeed when the room has been retrieved
+ */
+p.getPublicRoom = function() {
+
+	var redis = this.redis;
+
+	return redis.lindex( 'public', 0 );
+};
+
+/**
  * _generateKeys is a function which will create and store a set of 
  * keys which can be used to enter a room instead of a room id
  *
@@ -406,7 +450,7 @@ p._generateKeys = function() {
 
 	var redis = this.redis;
 
-	return redis.eval( fs.readFileSync( 'lua/generateKeys.lua', 'utf8' ), 0, 5 );
+	return redis.eval( LUA_GENERATE_KEYS , 0, 5 );
 };
 
 p._doesRoomExist = function( roomID ) {
@@ -454,5 +498,5 @@ p._getNextRoomId = function() {
 
 	var redis = this.redis;
 
-	return redis.eval( fs.readFileSync( 'lua/getRoomID.lua', 'utf8' ), 0 );
+	return redis.eval( LUA_GET_ROOM_ID , 0 );
 };
