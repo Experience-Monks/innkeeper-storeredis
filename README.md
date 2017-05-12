@@ -8,7 +8,7 @@ innkeeper-storeredis is a memory store for inn-keeper which uses a Redis databas
 
 [![NPM](https://nodei.co/npm/innkeeper-storeredis.png)](https://www.npmjs.com/package/innkeeper-storeredis)
 
-The following is a small example using this module with [`inkeeper-socket.io`](https://www.npmjs.com/package/innkeeper-socket.io):
+The following is a small example using this module with [`innkeeper-socket.io`](https://www.npmjs.com/package/innkeeper-socket.io):
 
 ```javascript
 var app = require('http').createServer( function(){} );
