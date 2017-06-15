@@ -138,7 +138,7 @@ p.leaveRoom = function( userID, roomID ) {
 
 			return getUsers()
 			.then( function( users ) {
-
+				
 				var message = {
 					roomID: roomID,
 					action: 'leave',
@@ -149,7 +149,7 @@ p.leaveRoom = function( userID, roomID ) {
 				emitter.emit( roomID, message );
 				redis.publish( 'user', JSON.stringify( message ) );
 
-				return roomID;
+				return users.length;
 			});
 		});
 	})
