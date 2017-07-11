@@ -437,7 +437,7 @@ p.getPublicRoom = function() {
 
 	var redis = this.redis;
 
-	return redis.lindex( 'public', 0 );
+	return redis.lpop( 'public', 0 );
 };
 
 /**
