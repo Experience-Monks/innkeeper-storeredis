@@ -1,5 +1,5 @@
 var promise = require( 'bluebird' );
-var romis = require( 'romis' );
+var Redis = require( 'ioredis' );
 var fs = require( 'fs' );
 var path = require( 'path' );
 var EventEmitter = require( 'events' ).EventEmitter;
@@ -23,18 +23,21 @@ var LUA_GENERATE_KEYS = fs.readFileSync( path.join( __dirname, 'lua/generateKeys
  *                      to redis with.
  * @return {storeRedis} An new instance of storeRedis
  */
-function storeRedis( redis ) {
+function storeRedis( redisURL ) {
 
 	if( !( this instanceof storeRedis ) )
-		return new storeRedis( redis );
+		return new storeRedis( redisURL );
 
 	EventEmitter.call( this );
 
-	this.redis = romis.fromRedis( redis );
+	this.redis = new Redis( redisURL );
+	this.sub = new Redis( redisURL );
+	this.sub.subscribe('user', 'data', 'variable');
 
-	this.redis.on( 'message', function( channel, message ) {
+	this.sub.on( 'message', function( channel, message ) {
 
 		message = JSON.parse( message );
+		message.channel = channel;
 		
 		this.emit( message.roomID, message );
 	}.bind( this ));
@@ -103,7 +106,7 @@ p.joinRoom = function( userID, roomID ) {
 					users: users
 				};
 
-				emitter.emit( roomID, message );
+				// emitter.emit( roomID, message );
 				redis.publish( 'user', JSON.stringify( message ) );
 
 				return roomID;
@@ -138,7 +141,7 @@ p.leaveRoom = function( userID, roomID ) {
 
 			return getUsers()
 			.then( function( users ) {
-				
+
 				var message = {
 					roomID: roomID,
 					action: 'leave',
@@ -146,10 +149,10 @@ p.leaveRoom = function( userID, roomID ) {
 					users: users
 				};
 
-				emitter.emit( roomID, message );
+				// emitter.emit( roomID, message );
 				redis.publish( 'user', JSON.stringify( message ) );
 
-				return users.length;
+				return roomID;
 			});
 		});
 	})
@@ -272,7 +275,14 @@ p.setRoomDataVar = function( roomID, key, value ) {
 
 			return redis.hset( 'roomData:' + roomID, key, value )
 			.then( function( countSet ) {
+				var message = {
+					roomID: roomID,
+					action: 'set',
+					key: key,
+					value: value
+				};
 
+				redis.publish( 'variable', JSON.stringify( message ) );
 				return value;
 			});
 		} else {
@@ -337,6 +347,12 @@ p.delRoomDataVar = function( roomID, key ) {
 				return redis.hdel( 'roomData:' + roomID, key );
 			})
 			.then( function() {
+				var message = {
+					roomID: roomID,
+					action: 'delete',
+					key: key
+				};
+				redis.publish( 'variable', JSON.stringify( message ) );
 
 				return rVal;
 			})
@@ -388,7 +404,13 @@ p.setRoomData = function( roomID, data ) {
 
 	return redis.hmset( 'roomData:' + roomID, data )
 	.then( function() {
+		var message = {
 
+			roomID: roomID,
+			data: data
+		};
+
+		redis.publish( 'data', JSON.stringify( message ) );
 		return data;
 	});
 
@@ -422,7 +444,6 @@ p.setRoomPublic = function( roomID ) {
  * @return {Promise} This promise will succeed when the room as been set as private
  */
 p.setRoomPrivate = function( roomID ) {
-
 	var redis = this.redis;
 
 	return redis.lrem( 'public', 0, roomID );
